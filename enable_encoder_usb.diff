@@ -1,0 +1,38 @@
+diff --git a/gui/main_controller.cpp b/gui/main_controller.cpp
+index abc1234..def5678 100644
+--- a/gui/main_controller.cpp
++++ b/gui/main_controller.cpp
+@@ -347,6 +347,33 @@ void main_controller::update()
+     handle_variables_changed();
+
++    // Enable encoder-based motion even when USB is connected
++    {
++        int32_t encoder_position = variables_.getVariableValue("Encoder position");
++        static int32_t last_encoder_position = encoder_position;
++
++        if (encoder_position != last_encoder_position)
++        {
++            int32_t delta = encoder_position - last_encoder_position;
++
++            int step_mode = variables_.getVariableValue("Step mode");
++            int pre = variables_.getVariableValue("Position prescaler");
++            int post = variables_.getVariableValue("Position postscaler");
++
++            int64_t delta_steps = static_cast<int64_t>(delta) * pre * step_mode / post;
++
++            int32_t current_target = variables_.getVariableValue("Target position");
++            int32_t new_target = current_target + static_cast<int32_t>(delta_steps);
++
++            int32_t min_pos = variables_.getVariableValue("Target min");
++            int32_t max_pos = variables_.getVariableValue("Target max");
++            new_target = std::clamp(new_target, min_pos, max_pos);
++
++            controller_.setTargetPosition(new_target);
++            variables_.setVariableValue("Target position", new_target);
++
++            last_encoder_position = encoder_position;
++            LOG_DEBUG("Encoder updated target: Δ%+lld → %d", delta_steps, new_target);
++        }
++    }
+
+     tic_interface->update();
