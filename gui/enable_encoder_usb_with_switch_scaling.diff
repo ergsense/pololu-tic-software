@@ -1,0 +1,76 @@
+diff --git a/gui/main_controller.cpp b/gui/main_controller.cpp
+index abc1234..fedcba9 100644
+--- a/gui/main_controller.cpp
++++ b/gui/main_controller.cpp
+@@ -347,6 +347,70 @@ void main_controller::update()
+     handle_variables_changed();
+
++    // Handle switch press for encoder scaling mode
++    {
++        static int last_switch_state = 0;
++        static int switch_mode_index = 0;
++        static int encoder_prescaler = 1;
++        static int encoder_postscaler = 1;
++
++        // Read selected input pin set as "User Input" in Tic
++        int switch_state = variables_.getVariableValue("User input active"); // 1 if pressed
++
++        if (switch_state == 1 && last_switch_state == 0)
++        {
++            switch_mode_index = (switch_mode_index + 1) % 5;
++            LOG_INFO("Switch pressed. Encoder scaling mode: %d", switch_mode_index);
++        }
++        last_switch_state = switch_state;
++
++        // Select scaling parameters based on press count
++        switch (switch_mode_index)
++        {
++            case 0:
++                encoder_prescaler = 4;
++                encoder_postscaler = 1;
++                break;
++            case 1:
++                encoder_prescaler = 1;
++                encoder_postscaler = 1;
++                break;
++            case 2:
++                encoder_prescaler = 1;
++                encoder_postscaler = 4;
++                break;
++            case 3:
++                encoder_prescaler = 1;
++                encoder_postscaler = 16;
++                break;
++            case 4:
++                switch_mode_index = 0; // reset
++                encoder_prescaler = 4;
++                encoder_postscaler = 1;
++                break;
++        }
+
++        // Encoder position block
++        int32_t encoder_position = variables_.getVariableValue("Encoder position");
++        static int32_t last_encoder_position = encoder_position;
++        if (encoder_position != last_encoder_position)
++        {
++            int32_t delta = encoder_position - last_encoder_position;
++
++            int step_mode = variables_.getVariableValue("Step mode");
++            int64_t delta_steps = static_cast<int64_t>(delta) * encoder_prescaler * step_mode / encoder_postscaler;
++
++            int32_t current_target = variables_.getVariableValue("Target position");
++            int32_t new_target = current_target + static_cast<int32_t>(delta_steps);
++
++            int32_t min_pos = variables_.getVariableValue("Target min");
++            int32_t max_pos = variables_.getVariableValue("Target max");
++            new_target = std::clamp(new_target, min_pos, max_pos);
++
++            controller_.setTargetPosition(new_target);
++            variables_.setVariableValue("Target position", new_target);
++            last_encoder_position = encoder_position;
++
++            LOG_DEBUG("Encoder updated target: Δ%+lld → %d", delta_steps, new_target);
++        }
++    }
+
+     tic_interface->update();
